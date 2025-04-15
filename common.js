@@ -9,30 +9,51 @@ const VERSIONS_JSON = 'https://ziglang.org/download/index.json';
 const MACH_VERSIONS_JSON = 'https://pkg.machengine.org/zig/index.json';
 const CACHE_PREFIX = "setup-zig-global-cache-";
 
-const MINIMUM_ZIG_VERSION_REGEX = /\.\s*minimum_zig_version\s*=\s*"(.*?)"/;
+const MINIMUM_ZIG_VERSION_REGEX = /\.?\s*minimum_zig_version\s*=\s*"(.*?)"/;
+console.log(`[DEBUG] Using regex pattern: ${MINIMUM_ZIG_VERSION_REGEX}`);
 
 let _cached_version = null;
 async function getVersion() {
+  console.log(`[DEBUG] getVersion called, cached version: ${_cached_version}`);
   if (_cached_version != null) {
+    console.log(`[DEBUG] Returning cached version: ${_cached_version}`);
     return _cached_version;
   }
 
   let raw = core.getInput('version');
+  console.log(`[DEBUG] Input version: '${raw}'`);
   if (raw === '') {
+    console.log(`[DEBUG] No explicit version provided, looking for build.zig.zon`);
     try {
       const zon = await fs.promises.readFile('build.zig.zon', 'utf8');
+      console.log(`[DEBUG] build.zig.zon found. Content length: ${zon.length} bytes`);
+      console.log(`[DEBUG] First 100 chars of build.zig.zon: ${zon.substring(0, 100)}...`);
+      
       const match = MINIMUM_ZIG_VERSION_REGEX.exec(zon);
+      console.log(`[DEBUG] Regex match result: ${match !== null ? 'Match found' : 'No match'}`);
 
       if (match !== null) {
+        console.log(`[DEBUG] Matched version: '${match[1]}'`);
         _cached_version = match[1];
         return _cached_version;
       }
 
+      console.log(`[DEBUG] Trying to manually find 'minimum_zig_version' in build.zig.zon`);
+      const minimumZigIndex = zon.indexOf('minimum_zig_version');
+      if (minimumZigIndex !== -1) {
+        console.log(`[DEBUG] 'minimum_zig_version' found at index ${minimumZigIndex}`);
+        console.log(`[DEBUG] Context around 'minimum_zig_version': ${zon.substring(Math.max(0, minimumZigIndex - 10), minimumZigIndex + 50)}`);
+      } else {
+        console.log(`[DEBUG] 'minimum_zig_version' not found in build.zig.zon`);
+      }
+
       core.info('Failed to find minimum_zig_version in build.zig.zon (using latest)');
     } catch (e) {
+      console.log(`[DEBUG] Error reading build.zig.zon: ${e}`);
       core.info(`Failed to read build.zig.zon (using latest): ${e}`);
     }
 
+    console.log(`[DEBUG] Defaulting to 'latest'`);
     raw = 'latest';
   }
 
@@ -161,4 +182,7 @@ module.exports = {
   getCachePrefix,
   getZigCachePath,
   getTarballCachePath,
+  // Expose _cached_version for testing
+  get _cached_version() { return _cached_version; },
+  set _cached_version(val) { _cached_version = val; }
 };
